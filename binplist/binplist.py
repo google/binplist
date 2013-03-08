@@ -201,10 +201,9 @@ class BinaryPlist(object):
 
     The binary plist header contains the following structure:
 
-    typedef struct {
-        uint8_t     _magic[6];
-        uint8_t     _version[2];
-    } CFBinaryPlistHeader;
+        OFFSET  ELEMENTS  TYPE   DESCRIPTION
+        0       6         uint8  Magic number
+        6       2         uint8  Plist version
 
     Raises:
       FormatError: When the header is too short or the magic value is invalid.
@@ -230,15 +229,14 @@ class BinaryPlist(object):
     The binary plist trailer consists of the following structure at the end of
     the file.
 
-    typedef struct {
-        uint8_t     _unused[5];
-        uint8_t     _sortVersion;
-        uint8_t     _offsetIntSize;
-        uint8_t     _objectRefSize;
-        uint64_t    _numObjects;
-        uint64_t    _topObject;
-        uint64_t    _offsetTableOffset;
-    } CFBinaryPlistTrailer;
+        OFFSET  ELEMENTS  TYPE    DESCRIPTION
+        0       5         uint8   Unused bytes
+        5       1         uint8   Sort version
+        6       1         uint8   Offset to the integer size
+        7       1         uint8   Offset to the object reference size
+        8       1         uint64  Number of objects
+        16      1         uint64  Top object identifier
+        24      1         uint64  Offset to the offset table
 
     Raises:
       IOError: When there is not enough data for the trailer.

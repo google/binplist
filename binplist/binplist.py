@@ -184,10 +184,15 @@ class BinaryPlist(object):
     return self._ParseObjectByIndex(self.top_level_index, self.object_offsets)
 
   def Open(self, file_obj):
-    data = file_obj.read()
-    self.fd = cStringIO.StringIO(data)
-    self._file_size = len(data)
-    self._LogDebug("File size is: %d.", self._file_size)
+    try:
+        start_offset = file_obj.tell()
+        file_obj.seek(0, os.SEEK_END)
+        self._file_size = file_obj.tell() - start_offset
+        file_obj.seek(start_offset, os.SEEK_SET)
+        self._bplist_start_offset = start_offset
+        self.fd = file_obj
+    except AttributeError:
+        raise Error("This file object doesn't support seek().")
 
   def Parse(self):
     """Parses the file descriptor at file_obj."""
@@ -218,7 +223,6 @@ class BinaryPlist(object):
     """
 
     header_struct = struct.Struct(">6s2s")
-    self.fd.seek(0)
     data = self.fd.read(header_struct.size)
     if len(data) != header_struct.size:
       raise FormatError("Wrong header length (got %d, expected %ld)." %
@@ -288,7 +292,7 @@ class BinaryPlist(object):
     if self.offtable_offset >= self._file_size:
       raise FormatError("Offset table offset past the file end.")
 
-    self.fd.seek(self.offtable_offset)
+    self.fd.seek(self._bplist_start_offset + self.offtable_offset)
     # Offsets table declared length
     data_size = self.object_count * self.offset_int_size
     # SANITY CHECK: See if the offset table is contained in the file
@@ -361,7 +365,7 @@ class BinaryPlist(object):
         # This only happens when the offset in the offset table is wrong
         obj = CorruptReference
       else:
-        self.fd.seek(offset)
+        self.fd.seek(self._bplist_start_offset + offset)
         obj = self._ParseObject()
         self.objects[index] = obj
     finally:
@@ -880,7 +884,7 @@ def readPlist(pathOrFile):
 
   magicversion = file_obj.read(8)
   if magicversion.startswith("bplist15"):
-    self._LogInfo("Binary plist version 1.5 found. Please, inform %s.",
+    logging.info("Binary plist version 1.5 found. Please, inform %s.",
                  __feedback_email__)
     raise FormatError("Binary plist version 1.5 found. Not supported yet.")
 

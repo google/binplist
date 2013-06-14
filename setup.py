@@ -16,7 +16,7 @@
 from setuptools import setup
 
 setup(name="binplist",
-      version="0.1.0",
+      version="0.1.1",
       description="A binary plist parser",
       author="Jordi Sanchez",
       author_email="binplist.feedback@gmail.com",

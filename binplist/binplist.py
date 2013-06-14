@@ -1,4 +1,5 @@
 #!/bin/env python
+#
 # Copyright 2013 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,6 +66,9 @@ import struct
 import xml.parsers.expat
 
 import pytz
+
+
+LOG_ULTRA_VERBOSE = -10
 
 
 class NullValue(object):
@@ -134,7 +138,10 @@ class BinaryPlist(object):
   # Timestamps in binary plists are relative to 2001-01-01T00:00:00.000000Z
   plist_epoch = datetime.datetime(2001, 1, 1, 0, 0, 0, tzinfo=pytz.utc)
 
-  def __init__(self, file_obj=None, discovery_mode=False):
+  # Length of the preview we show for each object when DEBUG logging
+  debug_object_preview_length = 48
+
+  def __init__(self, file_obj=None, discovery_mode=False, ultra_verbosity=True):
     """Constructor.
 
     Args:
@@ -144,6 +151,7 @@ class BinaryPlist(object):
       validating the parser against real binary plists. Disabled by default.
     """
     self.discovery_mode = discovery_mode
+    self.ultra_verbosity = ultra_verbosity
     self._Initialize()
     self.fd = None
     if file_obj:
@@ -179,7 +187,7 @@ class BinaryPlist(object):
     data = file_obj.read()
     self.fd = cStringIO.StringIO(data)
     self._file_size = len(data)
-    logging.debug("File size is: %d.", self._file_size)
+    self._LogDebug("File size is: %d.", self._file_size)
 
   def Parse(self):
     """Parses the file descriptor at file_obj."""
@@ -218,10 +226,10 @@ class BinaryPlist(object):
     magic, self.version = header_struct.unpack(data)
     if magic != "bplist":
       raise FormatError("Wrong magic '%s', expecting 'bplist'." % magic)
-    logging.debug("MAGIC = %s", magic)
-    logging.debug("VERSION = %s", self.version)
+    self._LogDebug("MAGIC = %s", magic)
+    self._LogDebug("VERSION = %s", self.version)
     if self.version[0] != "0":
-      logging.warn("Unknown version. Proceeding anyway...")
+      self._LogWarn("Unknown version. Proceeding anyway...")
 
   def _ReadTrailer(self):
     """Parses the trailer.
@@ -256,12 +264,12 @@ class BinaryPlist(object):
      self.top_level_index,
      self.offtable_offset) = trailer_struct.unpack(data)
 
-    logging.debug("Sort: %d", self.sort_version)
-    logging.debug("int size: %d", self.offset_int_size)
-    logging.debug("ref size: %d", self.object_ref_size)
-    logging.debug("obects available: %d", self.object_count)
-    logging.debug("top object: %d", self.top_level_index)
-    logging.debug("Offset table: %d", self.offtable_offset)
+    self._LogDebug("Sort: %d", self.sort_version)
+    self._LogDebug("int size: %d", self.offset_int_size)
+    self._LogDebug("ref size: %d", self.object_ref_size)
+    self._LogDebug("obects available: %d", self.object_count)
+    self._LogDebug("top object: %d", self.top_level_index)
+    self._LogDebug("Offset table: %d", self.offtable_offset)
 
   def _ReadOffsetTable(self):
     """Parses the bplist offset table.
@@ -292,16 +300,16 @@ class BinaryPlist(object):
     for object_index in range(self.object_count):
       # We can have offsets of sizes 1 to 8 bytes so we can't just use struct
       offset = self._ReadArbitraryLengthInteger(self.offset_int_size)
-      logging.debug("Object %d offset = %ld.", object_index, offset)
+      self._LogDebug("Object %d offset = %ld.", object_index, offset)
       self.object_offsets.append(offset)
 
   def _ReadArbitraryLengthInteger(self, length=0, endianness=BIG_ENDIAN):
     """Returns an integer from self.fd of the given length and endianness."""
-    logging.debug("read arbitrary length integer length %d", length)
+    self._LogUltraVerbose("read arbitrary length integer length %d", length)
     data = self.fd.read(length)
     if len(data) < length:
       length = len(data)
-      logging.debug("Not enough data, reading %d instead.", length)
+      self._LogUltraVerbose("Not enough data, reading %d instead.", length)
     integer = 0
     if endianness is BIG_ENDIAN:
       for data_index in range(0, length, 1):
@@ -319,7 +327,7 @@ class BinaryPlist(object):
     """Parses the objects at file offsets contained in object_offsets."""
     self.objects = {}
     for object_index, offset in enumerate(self.object_offsets):
-      logging.debug(">>> PARSING OBJECT %d AT OFFSET %ld",
+      self._LogDebug(">>> PARSING OBJECT %d AT OFFSET %ld",
                     object_index, offset)
       self._ParseObjectByIndex(object_index, self.object_offsets)
 
@@ -344,12 +352,11 @@ class BinaryPlist(object):
     # Add the object to the list of traversed objects
     self.objects_traversed.add(index)
     offset = offset_list[index]
-    logging.debug("Getting object at index %d", index)
+    self._LogDebug("Parsing object at index %d", index)
     try:
       obj = self.objects[index]
-      logging.debug("CACHE HIT")
+      self._LogDebug("Skipping: Object had already been parsed.")
     except KeyError:
-      logging.debug("CACHE MISS")
       if offset > self._file_size:
         # This only happens when the offset in the offset table is wrong
         obj = CorruptReference
@@ -360,7 +367,12 @@ class BinaryPlist(object):
     finally:
       # Remove the index from the list of traversed objects
       self.objects_traversed.remove(index)
-    logging.debug("Object %d = %s", index, obj)
+    if (self.debug_object_preview_length > 0
+        and len(str(obj)) > self.debug_object_preview_length):
+      fmt = "Object %%d ~= %%.%ds ..." % self.debug_object_preview_length
+      self._LogUltraVerbose(fmt, index, obj)
+    else:
+      self._LogUltraVerbose("Object %d = %s", index, obj)
     return obj
 
   def _ParseObject(self):
@@ -377,22 +389,22 @@ class BinaryPlist(object):
       IOError: When there's not enough data in self.fd to read a new object.
     """
 
-    logging.debug("At offset %d", self.fd.tell())
+    self._LogUltraVerbose("At offset %d", self.fd.tell())
     marker_string = self.fd.read(1)
     if len(marker_string) < 1:
       raise IOError("Not enough data available to read a new object.")
     marker = ord(marker_string[0])
-    logging.debug(">> MARKER: 0x%02lx", marker)
+    self._LogUltraVerbose(">> MARKER: 0x%02lx", marker)
     marker_lo = (marker & 0x0F)
     marker_hi = (marker & 0xF0) >> 4
-    logging.debug(">> MARKER HI: %lx", marker_hi)
-    logging.debug(">> MARKER LO: %lx", marker_lo)
+    self._LogUltraVerbose(">> MARKER HI: %lx", marker_hi)
+    self._LogUltraVerbose(">> MARKER LO: %lx", marker_lo)
     try:
       (marker_name, parsing_function_name) = self.KNOWN_MARKERS[marker_hi]
-      logging.debug("DATA TYPE: %s", marker_name)
+      self._LogDebug("DATA TYPE: %s", marker_name)
       return getattr(self, parsing_function_name)(marker_lo)
     except KeyError:
-      logging.warn("UNKNOWN MARKER %lx", marker)
+      self._LogWarn("UNKNOWN MARKER %lx", marker)
       return UnknownObject
 
   def _ParseBoolFill(self, marker_lo):
@@ -410,7 +422,7 @@ class BinaryPlist(object):
     try:
       return ret_values[marker_lo]
     except KeyError:
-      logging.warn("Simple value type %d unknown.", marker_lo)
+      self._LogWarn("Simple value type %d unknown.", marker_lo)
       return UnknownObject
 
   def _ParseInt(self, marker_lo):
@@ -423,23 +435,23 @@ class BinaryPlist(object):
       The integer value or RawValue when it's corrupt.
     """
     int_bytes = 1 << marker_lo
-    logging.debug("Integer size %d", int_bytes)
+    self._LogUltraVerbose("Integer size %d", int_bytes)
     # SANITY CHECK: The only allowed integer lengths by OSX seem to be 1, 2, 4,
     # 8 or 16 bytes.
     # XXX: Revisit this and decide if we should instead accept any length.
     if marker_lo not in [0, 1, 2, 3, 4]:
-      logging.warn("Non-standard integer length (%d).", marker_lo)
+      self._LogWarn("Non-standard integer length (%d).", marker_lo)
       data = self.fd.read(int_bytes)
       return RawValue(data)
 
     if int_bytes == 8 and self.version == "00":
       # 8-byte integers in version 00 are always signed
-      logging.debug("Signed integer")
+      self._LogUltraVerbose("Signed integer")
       int_struct = struct.Struct(">q")
     elif int_bytes == 16:
       if self.version == "00":
         # 16-bytes signed integer
-        logging.debug("Signed integer")
+        self._LogUltraVerbose("Signed integer")
         int_struct = struct.Struct(">qq")
       else:
         # 16-bytes unsigned integer? That's what the documentation seems to hint
@@ -449,8 +461,8 @@ class BinaryPlist(object):
         int_struct = struct.Struct(">QQ")
       data = self.fd.read(int_struct.size)
       (high, low) = int_struct.unpack(data)
-      logging.debug("High 8byte: %lx", high)
-      logging.debug("Low 8byte: %lx", low)
+      self._LogUltraVerbose("High 8byte: %lx", high)
+      self._LogUltraVerbose("Low 8byte: %lx", low)
       return (high << 64) | low
     else:
       # All other sizes are unsigned
@@ -458,7 +470,7 @@ class BinaryPlist(object):
     data = self.fd.read(int_struct.size)
     if len(data) < int_struct.size:
       return RawValue(data)
-    logging.debug("Raw integer: %r", data)
+    self._LogUltraVerbose("Raw integer: %r", data)
     (value,) = int_struct.unpack(data)
     return value
 
@@ -474,11 +486,11 @@ class BinaryPlist(object):
     Returns:
       A float or double object representing the object.
     """
-    logging.debug("Real size %d", marker_lo)
+    self._LogUltraVerbose("Real size %d", marker_lo)
     # SANITY CHECK: Real size must be 4 or 8 bytes on disk
     if marker_lo not in [2, 3]:
       real_length = 1 << marker_lo
-      logging.warn("Non-standard real number length (%d).", real_length)
+      self._LogWarn("Non-standard real number length (%d).", real_length)
       data = self.fd.read(real_length)
       return RawValue(data)
 
@@ -514,16 +526,16 @@ class BinaryPlist(object):
     # is wrong, but will read and decode 8 bytes anyway hoping only the marker
     # was corrupt.
     if marker_lo != 3:
-      logging.warn("Non-standard (8) date length (%d).", 1 << marker_lo)
+      self._LogWarn("Non-standard (8) date length (%d).", 1 << marker_lo)
       self.is_corrupt = True
     # Read an IEE754 double precision float
     date_struct = struct.Struct(">d")
     data = self.fd.read(date_struct.size)
     if len(data) < date_struct.size:
       return RawValue(data)
-    logging.debug("Raw date: %r.", data)
+    self._LogUltraVerbose("Raw date: %r.", data)
     (float_date,) = date_struct.unpack(data)
-    logging.debug("Date decoded as: %s.", float_date)
+    self._LogUltraVerbose("Date decoded as: %s.", float_date)
     fraction, integer = math.modf(float_date)
     try:
       date_offset = datetime.timedelta(seconds=int(integer),
@@ -567,7 +579,7 @@ class BinaryPlist(object):
       A byte string with the data contained in the object.
     """
     strlen = self._GetSizedIntFromFd(marker_lo)
-    logging.debug("String of size %d", strlen)
+    self._LogUltraVerbose("String of size %d", strlen)
     return self.fd.read(strlen*char_size)
 
   def _ReadStructFromFd(self, file_obj, structure):
@@ -584,7 +596,6 @@ class BinaryPlist(object):
     Returns:
       The unpacked structure elements.
     """
-    logging.debug(">>> Reading %d bytes", structure.size)
     data = file_obj.read(structure.size)
     if len(data) < structure.size:
       raise IOError
@@ -618,7 +629,7 @@ class BinaryPlist(object):
     """
 
     if marker_lo == 0xF:
-      logging.debug("marker_lo is 0xF, fetching real size")
+      self._LogUltraVerbose("marker_lo is 0xF, fetching real size")
       # First comes the byte count
       size_len_struct = struct.Struct(">B")
       (size,) = self._ReadStructFromFd(self.fd, size_len_struct)
@@ -626,16 +637,16 @@ class BinaryPlist(object):
       try:
         struct_char = self.bytesize_to_uchar[size_byte_count]
       except KeyError:
-        # TODO: Improve this, this is awful
+        # TODO(nop): Improve this, this is awful
         # CORRUPTION
         # If the value is not there, we'll default to 2
-        logging.warn("unknown size found %d, defaulting to 2", size_byte_count)
+        self._LogWarn("unknown size found %d, defaulting to 2", size_byte_count)
         struct_char = self.bytesize_to_uchar.get(2)
         self.is_corrupt = True
       strlen_struct = struct.Struct(">%c" % struct_char)
       (strlen,) = self._ReadStructFromFd(self.fd, strlen_struct)
       return strlen
-    logging.debug("Found size %s", marker_lo)
+    self._LogUltraVerbose("Found size %s", marker_lo)
     return marker_lo
 
   def _ParseUtf16(self, marker_lo):
@@ -654,7 +665,7 @@ class BinaryPlist(object):
       returned will not have a unicode string but raw bytes.
     """
     utf16 = self._ParseString(marker_lo, char_size=2)
-    logging.debug("RAW UTF16 = %s...", utf16[:min(len(utf16), 10)])
+    self._LogUltraVerbose("RAW UTF16 = %s...", utf16[:min(len(utf16), 10)])
     try:
       return utf16.decode("utf-16-be")
     except UnicodeDecodeError:
@@ -684,7 +695,7 @@ class BinaryPlist(object):
     # SANITY CHECK: Size
     uid_size = marker_lo + 1
     if uid_size not in [1, 2, 4, 8]:
-      logging.warn("Uncommon UID size %d (expected 1, 2, 4 or 8)", uid_size)
+      self._LogWarn("Uncommon UID size %d (expected 1, 2, 4 or 8)", uid_size)
     self._LogDiscovery("FOUND A UID!")
     return self._ReadArbitraryLengthInteger(uid_size)
 
@@ -709,24 +720,24 @@ class BinaryPlist(object):
     array = []
     arraylen = self._GetSizedIntFromFd(marker_lo)
     references = self._GetObjectReferences(arraylen)
-    logging.debug(references)
+    self._LogUltraVerbose(references)
     for reference in references:
       # We need to avoid circular references...
       if reference is CorruptReference:
         array.append(CorruptReference)
         continue
       elif reference in self.objects_traversed:
-        logging.warn("Circular reference detected at array object.")
+        self._LogWarn("Circular reference detected at array object.")
         self.is_corrupt = True
         array.append(CorruptReference)
         continue
       elif reference >= self.object_count:
-        logging.warn("Reference %d out of bounds, skipping...", reference)
+        self._LogWarn("Reference %d out of bounds, skipping...", reference)
         self.is_corrupt = True
         array.append(CorruptReference)
         continue
       array.append(self._ParseObjectByIndex(reference, self.object_offsets))
-    logging.debug(array)
+    self._LogUltraVerbose(array)
     return array
 
   def _GetObjectReferences(self, length):
@@ -742,7 +753,7 @@ class BinaryPlist(object):
       A list of references.
     """
     references = []
-    logging.debug("object_ref_size is %d", self.object_ref_size)
+    self._LogUltraVerbose("object_ref_size is %d", self.object_ref_size)
     struct_char = self.bytesize_to_uchar[self.object_ref_size]
     objref_struct = struct.Struct(">%c" % struct_char)
     for _ in range(length):
@@ -787,22 +798,22 @@ class BinaryPlist(object):
     """
     the_dict = {}
     dictlen = self._GetSizedIntFromFd(marker_lo)
-    logging.debug("Fetching key references.")
+    self._LogDebug("Fetching key references.")
     keys = self._GetObjectReferences(dictlen)
-    logging.debug("Fetching value references.")
+    self._LogDebug("Fetching value references.")
     values = self._GetObjectReferences(dictlen)
-    logging.debug(zip(keys, values))
+    self._LogUltraVerbose(zip(keys, values))
     for k_ref, v_ref in zip(keys, values):
       if k_ref in self.objects_traversed or k_ref >= self.object_count:
         # Circular reference at the key or key pointing to a nonexisting object
-        logging.warn("Circular reference key or invalid object key.")
+        self._LogWarn("Circular reference key or invalid object key.")
         key = "corrupt:%d" % k_ref
         self.is_corrupt = True
       else:
         key = self._ParseObjectByIndex(k_ref, self.object_offsets)
       if v_ref in self.objects_traversed or v_ref >= self.object_count:
         # Circular reference at value or value pointing to a nonexisting object
-        logging.warn("Circular reference value or invalid object value.")
+        self._LogWarn("Circular reference value or invalid object value.")
         value = CorruptReference
         self.is_corrupt = True
       else:
@@ -811,7 +822,7 @@ class BinaryPlist(object):
         the_dict[key] = value
       except TypeError:
         # key is not hashable, so we adjust...
-        logging.debug("Key %s not hashable... marking as corrupt.", k_ref)
+        self._LogDebug("Key %s not hashable... marking as corrupt.", k_ref)
         the_dict["corrupt:%d" % k_ref] = value
         self.is_corrupt = True
     return the_dict
@@ -820,8 +831,28 @@ class BinaryPlist(object):
     """Informs the user that something that requires research was found."""
 
     if self.discovery_mode:
-      logging.info("DISCOVERY FOUND: %s\nPlease inform %s.",
+      self._LogInfo("DISCOVERY FOUND: %s\nPlease inform %s.",
                    msg, __feedback_email__, *args, **kwargs)
+
+  def _Log(self, level=logging.INFO, *args, **kwargs):
+    if level == LOG_ULTRA_VERBOSE and self.ultra_verbosity:
+      self._LogDebug(*args, **kwargs)
+    logging.log(level, *args, **kwargs)
+
+  def _LogInfo(self, *args, **kwargs):
+    self._Log(logging.INFO, *args, **kwargs)
+
+  def _LogError(self, *args, **kwargs):
+    self._Log(logging.ERROR, *args, **kwargs)
+
+  def _LogWarn(self, *args, **kwargs):
+    self._Log(logging.WARN, *args, **kwargs)
+
+  def _LogDebug(self, *args, **kwargs):
+    self._Log(logging.WARN, *args, **kwargs)
+
+  def _LogUltraVerbose(self, *args, **kwargs):
+    self._Log(LOG_ULTRA_VERBOSE, *args, **kwargs)
 
 
 # Named readPlist so that binplist resembles the plistlib standard python module
@@ -849,7 +880,7 @@ def readPlist(pathOrFile):
 
   magicversion = file_obj.read(8)
   if magicversion.startswith("bplist15"):
-    logging.info("Binary plist version 1.5 found. Please, inform %s.",
+    self._LogInfo("Binary plist version 1.5 found. Please, inform %s.",
                  __feedback_email__)
     raise FormatError("Binary plist version 1.5 found. Not supported yet.")
 

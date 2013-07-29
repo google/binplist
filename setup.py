@@ -15,11 +15,13 @@
 
 from setuptools import setup
 
+import binplist
+
 setup(name="binplist",
-      version="0.1.1",
+      version=binplist.__version__,
       description="A binary plist parser",
       author="Jordi Sanchez",
-      author_email="binplist.feedback@gmail.com",
+      author_email=binplist.__feedback_email__,
       url="http://code.google.com/p/binplist",
       license="Apache Software License",
       packages=["binplist"],

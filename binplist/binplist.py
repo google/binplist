@@ -53,8 +53,8 @@ And the top_level_element index is available ad BinaryPlist.top_level_index.
 Happy bplisting!
 """
 
-__feedback_email__ = "binplist.feedback@gmail.com"
-
+from . import __version__
+from . import __feedback_email__
 
 import cStringIO
 import datetime
@@ -853,7 +853,7 @@ class BinaryPlist(object):
     self._Log(logging.WARN, *args, **kwargs)
 
   def _LogDebug(self, *args, **kwargs):
-    self._Log(logging.WARN, *args, **kwargs)
+    self._Log(logging.DEBUG, *args, **kwargs)
 
   def _LogUltraVerbose(self, *args, **kwargs):
     self._Log(LOG_ULTRA_VERBOSE, *args, **kwargs)
@@ -898,6 +898,3 @@ def readPlist(pathOrFile):
       return plistlib.readPlist(file_obj)
     except xml.parsers.expat.ExpatError:
       raise FormatError("Invalid plist file.")
-
-
-

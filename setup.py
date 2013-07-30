@@ -17,6 +17,7 @@ from setuptools import setup
 
 import binplist
 
+
 setup(name="binplist",
       version=binplist.__version__,
       description="A binary plist parser",

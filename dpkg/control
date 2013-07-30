@@ -1,0 +1,15 @@
+Source: binplist
+Section: misc
+Priority: extra
+Maintainer: Jordi Sanchez <binplist.feedback@gmail.com>
+Build-Depends: debhelper (>= 7), python, python-setuptools
+Standards-Version: 3.8.3
+Homepage: http://code.google.com/p/binplist/
+
+Package: binplist
+Section: python
+Architecture: all
+Depends: ${shlibs:Depends}, ${python:Depends}
+Description: Binary property list (plist) parser module written in python
+ Binary property list (plist) parser module written in python.
+

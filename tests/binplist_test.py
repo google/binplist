@@ -1,4 +1,6 @@
 #!/bin/env python
+# -*- coding: utf-8 -*-
+#
 # Copyright 2013 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +30,7 @@ import pytz
 
 class BinplistTest(unittest.TestCase):
   def setUp(self):
-    notrailer = ("bplist00")  # header
+    notrailer = "bplist00"  # header
     self.notrailer = StringIO.StringIO(notrailer)
 
     # A bplist of size 32, which lacks a full trailer
@@ -112,7 +114,7 @@ class BinplistTest(unittest.TestCase):
                                      '<plist></plist>')
 
   def testReadHeader(self):
-    blank_header = StringIO.StringIO("")
+    blank_header = StringIO.StringIO()
     plist = binplist.BinaryPlist(blank_header)
     self.assertRaises(binplist.FormatError, plist._ReadHeader)
     wrong_header = StringIO.StringIO("bla")
@@ -128,7 +130,7 @@ class BinplistTest(unittest.TestCase):
     self.assertEqual(plist.version, "00")
 
   def testReadTrailer(self):
-    blank_trailer = StringIO.StringIO("")
+    blank_trailer = StringIO.StringIO()
     plist = binplist.BinaryPlist(blank_trailer)
     self.assertRaises(IOError, plist._ReadTrailer)
     plist = binplist.BinaryPlist(self.minimal)
@@ -157,7 +159,7 @@ class BinplistTest(unittest.TestCase):
     self.assertRaises(binplist.FormatError, plist._ReadOffsetTable)
 
   def testReadPlist(self):
-    blank_file = StringIO.StringIO("")
+    blank_file = StringIO.StringIO()
     self.assertRaises(binplist.FormatError, binplist.readPlist, blank_file)
     bplist15 = StringIO.StringIO("bplist15")
     self.assertRaises(binplist.FormatError, binplist.readPlist, bplist15)
@@ -500,14 +502,14 @@ class BinplistTest(unittest.TestCase):
       plist = binplist.BinaryPlist(fd)
       # Fill objects_traversed with the current value as if we had been called
       # by a normal _Parse
-      plist.objects_traversed = set([0])
+      plist.objects_traversed = {0}
       plist.object_ref_size = ref_size
       plist.object_offsets = object_offsets
       plist.object_count = len(object_offsets)
       result = plist._ParseObject()
       self.assertListEqual(expected_result, result)
       # Test that the circular reference detection helper is cleaned properly
-      self.assertSetEqual(plist.objects_traversed, set([0]))
+      self.assertSetEqual(plist.objects_traversed, {0})
 
   def testParseDict(self):
     values = [
@@ -604,14 +606,54 @@ class BinplistTest(unittest.TestCase):
       plist = binplist.BinaryPlist(fd)
       # Fill objects_traversed with the current value as if we had been called
       # by a normal _Parse
-      plist.objects_traversed = set([0])
+      plist.objects_traversed = {0}
       plist.object_ref_size = ref_size
       plist.object_offsets = object_offsets
       plist.object_count = len(object_offsets)
       result = plist._ParseObject()
       self.assertEqual(expected_result, result)
       # Test that the circular reference detection helper is cleaned properly
-      self.assertSetEqual(plist.objects_traversed, set([0]))
+      self.assertSetEqual(plist.objects_traversed, {0})
+
+
+  def test_ParseObjectByIndex(self):
+    unicode_string = ("\x6F\x00\x11\x65\xaf\x8b\xfa\x76\x7b\x90\x7f\x96\xbe"
+                      "\x75\x33\x8b\xf7\x7e\xc8\x88\xab\x90\x1a\x8f\xc7\x00"
+                      "\x20\x00\x2d\x00\x20\x00\x68\x00\x65\x00\x68")
+    actual_string = u"斯诺登避难申请终被通过 - heh"
+    fd = StringIO.StringIO(unicode_string)
+    plist = binplist.BinaryPlist(file_obj=fd)
+    # Make an external offset_list
+    offset_list = [0]
+    resulting_object = plist._ParseObjectByIndex(0, offset_list)
+    self.assertEqual(resulting_object, actual_string)
+
+    # Second test
+    second_resulting_object = plist._ParseObjectByIndex(0, offset_list)
+    # Test that the UTF16 object was in the cache
+    self.assert_(second_resulting_object is resulting_object)
+    self.assertEqual(resulting_object, actual_string)
+
+    # Now test for something more complex. An array that has both unicode and
+    # str strings.
+    two_element_array = (
+      "\xA2"  # Array of 2 objects
+      "\x01"  # Reference to object unicode string
+      "\x02"  # Reference to object str string
+      "\x61\x65\xaf"  # Unicode object
+      "\x52\x99\xcd"  # Str object
+    )
+    fd = StringIO.StringIO(two_element_array)
+    plist = binplist.BinaryPlist(fd)
+    # Parsing with _ParseObjectByIndex requires setting up some bplist
+    # properties.
+    offset_list = [0, 3, 6]
+    plist.object_count = len(offset_list)
+    plist.object_offsets = offset_list
+    plist.object_ref_size = 1
+    plist._file_size = len(two_element_array)
+    resulting_object = plist._ParseObjectByIndex(0, offset_list)
+    self.assertEqual(resulting_object, [u"斯", "\x99\xcd"])
 
 
 if __name__ == "__main__":

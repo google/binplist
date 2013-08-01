@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 import logging
 import plistlib
 import pprint
@@ -21,18 +22,38 @@ import sys
 from binplist import binplist
 
 
+parser = argparse.ArgumentParser(description="A forensic plist parser.")
+parser.add_argument(
+  "plist", default=None, action="store",
+  help="plist file to be parsed")
+parser.add_argument(
+  "-V", "--version", action="version", version=binplist.__version__)
+parser.add_argument("-v", "--verbose", action="append_const", const=True,
+                    help="Turn verbose logging on. Use twice for ultra "
+                         "verbosity.")
+
+
 if __name__ == "__main__":
-  if len(sys.argv) <= 1:
-    print "Usage: %s <file>" % sys.argv[0]
+  options = parser.parse_args()
+  if not options.plist:
+    parser.print_help()
     sys.exit(-1)
 
-  with open(sys.argv[1]) as fd:
-    plist = binplist.BinaryPlist(file_obj=fd)
+  ultra_verbosity = False
+  if options.verbose:
+    if len(options.verbose) == 1:
+      logging.basicConfig(level=logging.DEBUG)
+    else:
+      ultra_verbosity = True
+      logging.basicConfig(level=binplist.LOG_ULTRA_VERBOSE)
+
+  with open(options.plist) as fd:
+    plist = binplist.BinaryPlist(file_obj=fd, ultra_verbosity=ultra_verbosity)
     try:
       res = plist.Parse()
       if plist.is_corrupt:
         logging.warn("%s LOOKS CORRUPTED. You might not obtain all data!\n",
-                     sys.argv[1])
+                     options.plist)
       pprint.PrettyPrinter().pprint(res)
     except binplist.FormatError, e:
-      pprint.PrettyPrinter().pprint(plistlib.readPlist(sys.argv[1]))
+      pprint.PrettyPrinter().pprint(plistlib.readPlist(options.plist))

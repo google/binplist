@@ -56,7 +56,6 @@ Happy bplisting!
 from . import __version__
 from . import __feedback_email__
 
-import cStringIO
 import datetime
 import logging
 import math
@@ -141,7 +140,8 @@ class BinaryPlist(object):
   # Length of the preview we show for each object when DEBUG logging
   debug_object_preview_length = 48
 
-  def __init__(self, file_obj=None, discovery_mode=False, ultra_verbosity=True):
+  def __init__(self, file_obj=None, discovery_mode=False,
+               ultra_verbosity=False):
     """Constructor.
 
     Args:
@@ -185,14 +185,14 @@ class BinaryPlist(object):
 
   def Open(self, file_obj):
     try:
-        start_offset = file_obj.tell()
-        file_obj.seek(0, os.SEEK_END)
-        self._file_size = file_obj.tell() - start_offset
-        file_obj.seek(start_offset, os.SEEK_SET)
-        self._bplist_start_offset = start_offset
-        self.fd = file_obj
+      start_offset = file_obj.tell()
+      file_obj.seek(0, os.SEEK_END)
+      self._file_size = file_obj.tell() - start_offset
+      file_obj.seek(start_offset, os.SEEK_SET)
+      self._bplist_start_offset = start_offset
+      self.fd = file_obj
     except AttributeError:
-        raise Error("This file object doesn't support seek().")
+      raise Error("This file object doesn't support seek().")
 
   def Parse(self):
     """Parses the file descriptor at file_obj."""
@@ -371,12 +371,11 @@ class BinaryPlist(object):
     finally:
       # Remove the index from the list of traversed objects
       self.objects_traversed.remove(index)
-    if (self.debug_object_preview_length > 0
-        and len(str(obj)) > self.debug_object_preview_length):
+    output_string = ToDebugString(obj)
+    fmt = "Object %d = %s"
+    if len(output_string) > self.debug_object_preview_length:
       fmt = "Object %%d ~= %%.%ds ..." % self.debug_object_preview_length
-      self._LogUltraVerbose(fmt, index, obj)
-    else:
-      self._LogUltraVerbose("Object %d = %s", index, obj)
+    self._LogUltraVerbose(fmt, index, output_string)
     return obj
 
   def _ParseObject(self):
@@ -587,10 +586,10 @@ class BinaryPlist(object):
     return self.fd.read(strlen*char_size)
 
   def _ReadStructFromFd(self, file_obj, structure):
-    """Reads the given structucture from file_obj and returns the unpacked data.
+    """Reads the given structure from file_obj and returns the unpacked data.
 
     Raises:
-      IOError: When there wasn't enough data in file_obj to acommodate the
+      IOError: When there wasn't enough data in file_obj to accommodate the
       requested structure.
 
     Args:
@@ -898,3 +897,10 @@ def readPlist(pathOrFile):
       return plistlib.readPlist(file_obj)
     except xml.parsers.expat.ExpatError:
       raise FormatError("Invalid plist file.")
+
+
+def ToDebugString(string):
+  try:
+    return str(string)
+  except UnicodeEncodeError:
+    return unicode(string).encode('unicode_escape')

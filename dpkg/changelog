@@ -1,3 +1,10 @@
+binplist (0.1-4) unstable; urgency=low
+
+  * Added command line options to the binplist command.
+  * Fixed a Unicode bug when dealing with UTF16 objects.
+
+ -- Jordi Sanchez <binplist.feedback@gmail.com>  Wed, 31 Jul 2013 21:22:00 +0200
+
 binplist (0.1-3) unstable; urgency=low
 
   * Initial release

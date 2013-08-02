@@ -15,8 +15,8 @@
 
 import argparse
 import logging
+import json
 import plistlib
-import pprint
 import sys
 
 from binplist import binplist
@@ -31,6 +31,8 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", action="append_const", const=True,
                     help="Turn verbose logging on. Use twice for ultra "
                          "verbosity.")
+parser.add_argument("-e", "--encoding", default="utf-8",
+                    help="Sets the encoding of the output data.")
 
 
 if __name__ == "__main__":
@@ -54,6 +56,6 @@ if __name__ == "__main__":
       if plist.is_corrupt:
         logging.warn("%s LOOKS CORRUPTED. You might not obtain all data!\n",
                      options.plist)
-      pprint.PrettyPrinter().pprint(res)
     except binplist.FormatError, e:
-      pprint.PrettyPrinter().pprint(plistlib.readPlist(options.plist))
+      res = plistlib.readPlist(options.plist)
+    print json.dumps(res, ensure_ascii=False, indent=4).encode(options.encoding)

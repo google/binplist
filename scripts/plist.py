@@ -37,14 +37,19 @@ parser.add_argument("-e", "--encoding", default="utf-8",
 
 class BinplistJSONEncoder(json.JSONEncoder):
   def encode(self, o):
-    if issubclass(o, binplist.NullValue):
-      return "NULL"
-    elif issubclass(o, binplist.CorruptReference):
-      return "CORRUPTREF()"
-    elif issubclass(o, binplist.RawValue):
-      return "RAW(%s)" % o
-    elif issubclass(o, binplist.UnknownObject):
-      return "UNKNOWN()"
+    try:
+      if issubclass(binplist.NullValue, o):
+        return "NULL"
+      elif issubclass(binplist.CorruptReference, o):
+        return "CORRUPTREF()"
+      elif issubclass(binplist.RawValue, o):
+        return "RAW(%s)" % o
+      elif issubclass(binplist.UnknownObject, o):
+        return "UNKNOWN()"
+      else:
+        return super(BinplistJSONEncoder, self).encode(o)
+    except TypeError:
+      return super(BinplistJSONEncoder, self).encode(o)
 
 
 if __name__ == "__main__":

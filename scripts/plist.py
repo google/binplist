@@ -35,6 +35,18 @@ parser.add_argument("-e", "--encoding", default="utf-8",
                     help="Sets the encoding of the output data.")
 
 
+class BinplistJSONEncoder(json.JSONEncoder):
+  def encode(self, o):
+    if issubclass(o, binplist.NullValue):
+      return "NULL"
+    elif issubclass(o, binplist.CorruptReference):
+      return "CORRUPTREF()"
+    elif issubclass(o, binplist.RawValue):
+      return "RAW(%s)" % o
+    elif issubclass(o, binplist.UnknownObject):
+      return "UNKNOWN()"
+
+
 if __name__ == "__main__":
   options = parser.parse_args()
   if not options.plist:
@@ -52,10 +64,13 @@ if __name__ == "__main__":
   with open(options.plist) as fd:
     plist = binplist.BinaryPlist(file_obj=fd, ultra_verbosity=ultra_verbosity)
     try:
-      res = plist.Parse()
+      parsed_plist = plist.Parse()
       if plist.is_corrupt:
         logging.warn("%s LOOKS CORRUPTED. You might not obtain all data!\n",
                      options.plist)
     except binplist.FormatError, e:
-      res = plistlib.readPlist(options.plist)
-    print json.dumps(res, ensure_ascii=False, indent=4).encode(options.encoding)
+      parsed_plist = plistlib.readPlist(options.plist)
+    print json.dumps(parsed_plist,
+                     cls=BinplistJSONEncoder,
+                     ensure_ascii=False,
+                     indent=4).encode(options.encoding)

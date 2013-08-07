@@ -27,6 +27,6 @@ setup(name="binplist",
       license="Apache Software License",
       packages=["binplist"],
       test_suite = "tests",
-      scripts=['scripts/binplist'],
+      scripts=['scripts/plist.py'],
       install_requires=["pytz"],
       )

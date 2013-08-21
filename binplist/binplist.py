@@ -1,4 +1,5 @@
 #!/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright 2013 Google Inc. All Rights Reserved.
 #
@@ -904,3 +905,49 @@ def ToDebugString(string):
     return str(string)
   except UnicodeEncodeError:
     return unicode(string).encode('unicode_escape')
+
+
+
+def PlistToUnicode(o, string_encoding='none', encoding_options="strict", indent=4,
+              previous_indent=0):
+  """Returns the Unicode representation of a plist object.
+
+  Handles the dictionary case """
+  if isinstance(o, dict):
+    indentation = u' '*(previous_indent+indent)
+    indentation_join = u',\n%s' % indentation
+    opening_bracket = u"{\n%s" % indentation
+    closing_bracket = u"\n%s}" % (u' '*previous_indent)
+    pieces = []
+    for k, v in o.iteritems():
+      key = PlistToUnicode(k, string_encoding=string_encoding,
+                      encoding_options=encoding_options, indent=indent,
+                      previous_indent=previous_indent+indent)
+      value = PlistToUnicode(v, string_encoding=string_encoding,
+                        encoding_options=encoding_options, indent=indent,
+                        previous_indent=previous_indent+indent)
+      pieces.append(u"%s: %s" % (key, value))
+
+    return ''.join([opening_bracket,
+                    indentation_join.join(pieces),
+                    closing_bracket])
+  elif isinstance(o, str):
+    if string_encoding == "none":
+      return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o])
+    try:
+      return u'"%s"' % o.decode(string_encoding, encoding_options)
+    except UnicodeDecodeError:
+      return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o])
+  elif isinstance(o, unicode):
+    return u'"%s"' % o
+  elif isinstance(o, RawValue):
+    return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o.value])
+  elif o is CorruptReference:
+    return u"##CORRUPT_REFERENCE##"
+  elif o is NullValue:
+    return u"NULL"
+  else:
+    try:
+      return u'[%s]' % u', '.join([PlistToUnicode(piece) for piece in o])
+    except TypeError:
+      return unicode(o)

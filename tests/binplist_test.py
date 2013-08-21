@@ -656,5 +656,52 @@ class BinplistTest(unittest.TestCase):
     self.assertEqual(resulting_object, [u"斯", "\x99\xcd"])
 
 
+  def test_PlistToUnicode(self):
+    tests = [
+      (3,
+       u'3'),
+      ('abc',  # plist
+       u'"\\x61\\x62\\x63"',  # with no string encoding
+       u'"abc"'),  # with utf-8 encoding
+
+      ([1,2,3],
+       u'[1, 2, 3]',
+       u'[1, 2, 3]'),
+
+      (binplist.RawValue('abc'),
+        u'"\\x61\\x62\\x63"',
+        u'"\\x61\\x62\\x63"'),
+
+      (binplist.CorruptReference,
+       u'##CORRUPT_REFERENCE##',
+       u'##CORRUPT_REFERENCE##'),
+
+      (binplist.NullValue,
+       u'NULL',
+       u'NULL'),
+
+      ({'a': 3},
+       u'{\n    "\\x61": 3\n}',
+       u'{\n    "a": 3\n}'),
+
+      ('\xff\x34\x55',
+       u'"\\xff\\x34\\x55"'),
+
+      ('\x00\x00\x00',
+       u'"\\x00\\x00\\x00')
+    ]
+    for (plist, expected_outcome, expected_outcome_utf8) in tests:
+      self.assertEqual(expected_outcome, binplist.PlistToUnicode(plist))
+      if expected_outcome_utf8 == UnicodeDecodeError:
+        self.assertRaises(UnicodeDecodeError,
+                          binplist.PlistToUnicode,
+                          plist,
+                          string_encoding='utf-8')
+      else:
+        self.assertEqual(expected_outcome_utf8,
+                         binplist.PlistToUnicode(plist,
+                                                 string_encoding='utf-8'))
+
+
 if __name__ == "__main__":
   unittest.main()

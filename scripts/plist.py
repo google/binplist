@@ -15,7 +15,6 @@
 
 import argparse
 import logging
-import json
 import plistlib
 import sys
 
@@ -31,25 +30,13 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", action="append_const", const=True,
                     help="Turn verbose logging on. Use twice for ultra "
                          "verbosity.")
-parser.add_argument("-e", "--encoding", default="utf-8",
-                    help="Sets the encoding of the output data.")
-
-
-class BinplistJSONEncoder(json.JSONEncoder):
-  def encode(self, o):
-    try:
-      if issubclass(binplist.NullValue, o):
-        return "NULL"
-      elif issubclass(binplist.CorruptReference, o):
-        return "CORRUPTREF()"
-      elif issubclass(binplist.RawValue, o):
-        return "RAW(%s)" % o
-      elif issubclass(binplist.UnknownObject, o):
-        return "UNKNOWN()"
-      else:
-        return super(BinplistJSONEncoder, self).encode(o)
-    except TypeError:
-      return super(BinplistJSONEncoder, self).encode(o)
+parser.add_argument("-e", "--string-encoding", default="none",
+                    help="Sets the encoding of binplist strings.")
+parser.add_argument("-E", "--output-encoding", default="utf-8",
+                    help="Sets the output encoding of binplist.")
+parser.add_argument("-R", "--output-encoding-option", default="strict",
+                    help=("Sets what to do when encoding the output of binplist "
+                          "and some characters cannot be converted."))
 
 
 if __name__ == "__main__":
@@ -66,7 +53,7 @@ if __name__ == "__main__":
       ultra_verbosity = True
       logging.basicConfig(level=binplist.LOG_ULTRA_VERBOSE)
 
-  with open(options.plist) as fd:
+  with open(options.plist, "rb") as fd:
     plist = binplist.BinaryPlist(file_obj=fd, ultra_verbosity=ultra_verbosity)
     try:
       parsed_plist = plist.Parse()
@@ -75,7 +62,10 @@ if __name__ == "__main__":
                      options.plist)
     except binplist.FormatError, e:
       parsed_plist = plistlib.readPlist(options.plist)
-    print json.dumps(parsed_plist,
-                     cls=BinplistJSONEncoder,
-                     ensure_ascii=False,
-                     indent=4).encode(options.encoding)
+    print parsed_plist
+
+    print binplist.PlistToUnicode(
+      parsed_plist,
+      string_encoding=options.string_encoding).encode(
+        options.output_encoding,
+        options.output_encoding_option)

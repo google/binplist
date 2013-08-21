@@ -62,8 +62,6 @@ if __name__ == "__main__":
                      options.plist)
     except binplist.FormatError, e:
       parsed_plist = plistlib.readPlist(options.plist)
-    print parsed_plist
-
     print binplist.PlistToUnicode(
       parsed_plist,
       string_encoding=options.string_encoding).encode(

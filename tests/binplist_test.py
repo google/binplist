@@ -699,11 +699,9 @@ class BinplistTest(unittest.TestCase):
        u"{\n    'a': {\n        'b': 3\n    }\n}",  # default indent
        u"{\n    'a': {\n        'b': 3\n    }\n}"), # default indent
 
-
       ({u"斯": '\xff\x61'},
        u"{\n    '斯': '\\xffa'\n}",  # smartascii handles a gracefully
        u"{\n    '斯': '\\xff\\x61'\n}"),  # utf-8 fails decoding, full-escape
-
 
       # Misc values
       (binplist.RawValue('abc'),

@@ -30,13 +30,22 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", action="append_const", const=True,
                     help="Turn verbose logging on. Use twice for ultra "
                          "verbosity.")
-parser.add_argument("-e", "--string-encoding", default="none",
-                    help="Sets the encoding of binplist strings.")
-parser.add_argument("-E", "--output-encoding", default="utf-8",
-                    help="Sets the output encoding of binplist.")
-parser.add_argument("-R", "--output-encoding-option", default="strict",
-                    help=("Sets what to do when encoding the output of binplist "
+parser.add_argument("-e", "--string-encoding", default="safeascii",
+                    help="Encoding of binplist strings.")
+parser.add_argument("-eo", "--string-encoding-option", default="strict",
+                    choices=['strict', 'ignore', 'replace'],
+                    help=("What to do when encoding strings of a binary plist "
                           "and some characters cannot be converted."))
+parser.add_argument("-E", "--output-encoding", default="utf-8",
+                    help="Output encoding of binplist.")
+parser.add_argument("-EO", "--output-encoding-option", default="strict",
+                    choices=['strict', 'ignore', 'replace',
+                             'xmlcharrefreplace', 'backslashreplace'],
+                    help=("What to do when encoding the output of binplist "
+                          "and some characters cannot be converted."))
+parser.add_argument("-d", "--discovery-mode", action="store_true",
+                    help=("Will inform you when a UID or a SET is found so "
+                          "that you can help me improve the parser."))
 
 
 if __name__ == "__main__":
@@ -54,7 +63,9 @@ if __name__ == "__main__":
       logging.basicConfig(level=binplist.LOG_ULTRA_VERBOSE)
 
   with open(options.plist, "rb") as fd:
-    plist = binplist.BinaryPlist(file_obj=fd, ultra_verbosity=ultra_verbosity)
+    plist = binplist.BinaryPlist(file_obj=fd,
+                                 ultra_verbosity=ultra_verbosity,
+                                 discovery_mode=options.discovery_mode)
     try:
       parsed_plist = plist.Parse()
       if plist.is_corrupt:
@@ -62,8 +73,10 @@ if __name__ == "__main__":
                      options.plist)
     except binplist.FormatError, e:
       parsed_plist = plistlib.readPlist(options.plist)
+
     print binplist.PlistToUnicode(
       parsed_plist,
-      string_encoding=options.string_encoding).encode(
+      string_encoding=options.string_encoding,
+      encoding_options=options.string_encoding_option).encode(
         options.output_encoding,
         options.output_encoding_option)

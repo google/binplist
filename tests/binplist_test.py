@@ -658,19 +658,57 @@ class BinplistTest(unittest.TestCase):
 
   def test_PlistToUnicode(self):
     tests = [
+      # Integer tests
       (3,
+       u'3',
        u'3'),
-      ('abc',  # plist
-       u'"\\x61\\x62\\x63"',  # with no string encoding
-       u'"abc"'),  # with utf-8 encoding
 
+      (-9239132913921,
+       u'-9239132913921',
+       u'-9239132913921'),
+
+      # String tests
+      ('abc',  # plist
+       u"'abc'",  # with default smartascii
+       u"'abc'"),  # with utf-8 encoding
+
+      ('\xff\x34\x55',
+       u"'\\xff4U'",  # smartascii handles this case "visually gracefully"
+       u"'\\xff\\x34\\x55'"),  # invalid utf-8, so it's fully escaped
+
+      ('\x00\x00\x00',
+       u"'\\x00\\x00\\x00'",  # smartascii escapes non-printable characters
+       u"'\x00\x00\x00'"),  # utf-8 actually encodes these
+
+      # Unicode string tests
+      (u"斯",
+       u"'斯'",
+       u"'斯'",),
+
+      # Array tests
       ([1,2,3],
        u'[1, 2, 3]',
        u'[1, 2, 3]'),
 
+      # Dictionary tests
+      ({'a': 3},
+       u"{\n    'a': 3\n}",
+       u"{\n    'a': 3\n}"),
+
+      ({'a': {'b': 3}},
+       u"{\n    'a': {\n        'b': 3\n    }\n}",  # default indent
+       u"{\n    'a': {\n        'b': 3\n    }\n}"), # default indent
+
+
+      ({u"斯": '\xff\x61'},
+       u"{\n    '斯': '\\xffa'\n}",  # smartascii handles a gracefully
+       u"{\n    '斯': '\\xff\\x61'\n}"),  # utf-8 fails decoding, full-escape
+
+
+      # Misc values
       (binplist.RawValue('abc'),
-        u'"\\x61\\x62\\x63"',
-        u'"\\x61\\x62\\x63"'),
+        u"'\\x61\\x62\\x63'",
+        u"'\\x61\\x62\\x63'"),
 
       (binplist.CorruptReference,
        u'##CORRUPT_REFERENCE##',
@@ -680,15 +718,9 @@ class BinplistTest(unittest.TestCase):
        u'NULL',
        u'NULL'),
 
-      ({'a': 3},
-       u'{\n    "\\x61": 3\n}',
-       u'{\n    "a": 3\n}'),
-
-      ('\xff\x34\x55',
-       u'"\\xff\\x34\\x55"'),
-
-      ('\x00\x00\x00',
-       u'"\\x00\\x00\\x00')
+      (binplist.UnknownObject,
+       u'##UNKNOWN_OBJECT##',
+       u'##UNKNOWN_OBJECT##'),
     ]
     for (plist, expected_outcome, expected_outcome_utf8) in tests:
       self.assertEqual(expected_outcome, binplist.PlistToUnicode(plist))

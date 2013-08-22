@@ -32,7 +32,7 @@ are corrupt. For this use case, it's better to create an instance of the
 BinaryPlist class and then call the Parse() method on it, with a file-like
 object as an argument.
 
-  with open("myfile.plist") as fd:
+  with open("myfile.plist", "rb") as fd:
     bplist = BinaryPlist(fd)
     top_level_object = bplist.Parse(fd)
 
@@ -62,6 +62,7 @@ import logging
 import math
 import os
 import plistlib
+import string
 import struct
 import xml.parsers.expat
 
@@ -82,13 +83,16 @@ class RawValue(object):
     self.value = value
 
   def __str__(self):
-    return str(self.value)
+    return self.value
 
   def __repr__(self):
     return repr(self.value)
 
   def __eq__(self, other):
     return self.value == other
+
+  def __unicode__(self):
+    return u"'%s'" % ''.join([u"\\x%s" % c.encode('hex') for c in self.value])
 
 
 class CorruptReference(object):
@@ -673,6 +677,7 @@ class BinaryPlist(object):
     try:
       return utf16.decode("utf-16-be")
     except UnicodeDecodeError:
+      self._LogWarn("Invalid UTF-16 data")
       return RawValue(utf16)
 
   def _ParseUid(self, marker_lo):
@@ -879,7 +884,7 @@ def readPlist(pathOrFile):
     file_obj = pathOrFile
   except AttributeError:
     # Must be a path then
-    file_obj = open(pathOrFile)
+    file_obj = open(pathOrFile, "rb")
     bplist_start_offset = file_obj.tell()
 
   magicversion = file_obj.read(8)
@@ -908,11 +913,16 @@ def ToDebugString(string):
 
 
 
-def PlistToUnicode(o, string_encoding='none', encoding_options="strict", indent=4,
-              previous_indent=0):
+def PlistToUnicode(o, string_encoding='safeascii', encoding_options="strict",
+                   indent=4, previous_indent=0):
   """Returns the Unicode representation of a plist object.
 
-  Handles the dictionary case """
+  This is mostly just to handle displaying unicode keys or values in
+  dictionaries as the default dict implementation escapes them, and to try to
+  represent byte strings in a more human-readable form.
+
+  Not very proud of the implementation but it is what it is.
+  """
   if isinstance(o, dict):
     indentation = u' '*(previous_indent+indent)
     indentation_join = u',\n%s' % indentation
@@ -927,27 +937,40 @@ def PlistToUnicode(o, string_encoding='none', encoding_options="strict", indent=
                         encoding_options=encoding_options, indent=indent,
                         previous_indent=previous_indent+indent)
       pieces.append(u"%s: %s" % (key, value))
-
+    if not pieces:
+      return '{}'
     return ''.join([opening_bracket,
                     indentation_join.join(pieces),
                     closing_bracket])
   elif isinstance(o, str):
-    if string_encoding == "none":
-      return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o])
     try:
-      return u'"%s"' % o.decode(string_encoding, encoding_options)
-    except UnicodeDecodeError:
-      return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o])
+      if string_encoding == "safeascii":
+        safeascii = []
+        for c in o:
+          if c in string.printable:
+            safeascii.append(c)
+          else:
+            safeascii.append("\\x" + c.encode("hex"))
+        return u"'%s'" % (''.join(safeascii)).decode("ascii", "strict")
+      return u"'%s'" % o.decode(string_encoding, encoding_options)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+      return u"'%s'" % ''.join([u"\\x%s" % c.encode('hex') for c in o])
   elif isinstance(o, unicode):
-    return u'"%s"' % o
-  elif isinstance(o, RawValue):
-    return u'"%s"' % ''.join([u"\\x%s" % c.encode('hex') for c in o.value])
-  elif o is CorruptReference:
-    return u"##CORRUPT_REFERENCE##"
+    # Return a quote-enclosed string
+    return u"'%s'" % o
   elif o is NullValue:
     return u"NULL"
+  elif o is CorruptReference:
+    return u"##CORRUPT_REFERENCE##"
+  elif o is UnknownObject:
+    return u"##UNKNOWN_OBJECT##"
   else:
     try:
-      return u'[%s]' % u', '.join([PlistToUnicode(piece) for piece in o])
+      return u'[%s]' % u', '.join([PlistToUnicode(piece,
+                                                  string_encoding,
+                                                  encoding_options,
+                                                  indent,
+                                                  previous_indent)
+                                   for piece in o])
     except TypeError:
       return unicode(o)

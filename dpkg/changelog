@@ -1,11 +1,20 @@
-binplist (0.1.4-0) unstable; urgency=low
+python-binplist (0.1.5-1) unstable; urgency=low
+
+  * Changed binplist into python-binplist
+  * Bumped version
+  * Changes for project move
+  * Added README
+
+ -- Joachim Metz <joachim.metz@gmail.com>  Fri, 24 Apr 2015 11:18:03 +0200
+
+python-binplist (0.1.4-0) unstable; urgency=low
 
   * Added command line options to the binplist command.
   * Fixed a Unicode bug when dealing with UTF16 objects.
 
  -- Jordi Sanchez <binplist.feedback@gmail.com>  Wed, 21 Aug 2013 22:54:00 +0200
 
-binplist (0.1-3) unstable; urgency=low
+python-binplist (0.1-3) unstable; urgency=low
 
   * Initial release
 

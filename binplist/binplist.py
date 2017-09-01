@@ -555,7 +555,7 @@ class BinaryPlist(object):
     """Parses a data object.
 
     Data objects are stored as plain byte dumps. As in python 2.7 there's no
-    distiction between bytes and strings, the same function is used.
+    distinction between bytes and strings, the same function is used.
 
     Args:
       marker_lo: The lower nibble of the marker.

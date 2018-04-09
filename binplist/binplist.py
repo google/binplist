@@ -275,7 +275,7 @@ class BinaryPlist(object):
     self._LogDebug("Sort: %d", self.sort_version)
     self._LogDebug("int size: %d", self.offset_int_size)
     self._LogDebug("ref size: %d", self.object_ref_size)
-    self._LogDebug("obects available: %d", self.object_count)
+    self._LogDebug("objects available: %d", self.object_count)
     self._LogDebug("top object: %d", self.top_level_index)
     self._LogDebug("Offset table: %d", self.offtable_offset)
 
@@ -300,6 +300,8 @@ class BinaryPlist(object):
     # Offsets table declared length
     data_size = self.object_count * self.offset_int_size
     # SANITY CHECK: See if the offset table is contained in the file
+    if data_size == 0:
+      raise FormatError("Length of offsets table is 0.")
     if data_size > (self._file_size - self.offtable_offset):
       raise FormatError("Length of offsets table larger than the data available"
                         "in the file (%d vs %ld)." %

@@ -141,8 +141,7 @@ class BinplistTest(unittest.TestCase):
     plist = binplist.BinaryPlist(self.minimal)
     # Start by parsing a minimal offsets table
     plist._ReadTrailer()
-    plist._ReadOffsetTable()
-    self.assertListEqual([], plist.object_offsets)
+    self.assertRaises(binplist.FormatError, plist._ReadOffsetTable)
     # single offset table
     plist = binplist.BinaryPlist(self.single)
     plist._ReadTrailer()
